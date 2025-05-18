@@ -6,5 +6,5 @@ class Profile(models.Model):
     profile_img = models.CharField(max_length=1000, default='')
     otp = models.CharField(max_length=6, blank=True, null=True)
 
-    def __str__(self):  
-        return self.user.username
+    def __str__(self):
+        return f"{self.user.username} Profile"

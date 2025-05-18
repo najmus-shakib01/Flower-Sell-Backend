@@ -21,8 +21,8 @@ class SSLCommerzFlowerPaymentView(APIView):
             'total_amount': float(flower.price),
             'currency': 'BDT',
             'tran_id': transaction_id,
-            'success_url': f"https://flower-seal-backend.vercel.app/api/v1/payments/payment_success/",
-            'fail_url': f"https://flower-seal-backend.vercel.app/api/v1/payments/payment_fail/?id={flower.id}",
+            'success_url': f"https://flower-sell-backend.vercel.app/api/v1/payment/payment_success/",
+            'fail_url': f"https://flower-sell-backend.vercel.app/api/v1/payment/payment_fail/?id={flower.id}",
             'cus_name': 'Test User',
             'cus_email': 'test@example.com',
             'cus_phone': '01700000000',
@@ -61,7 +61,7 @@ def payment_success(request, *args, **kwargs):
             order.transaction_id = tran_id  
             order.save()
             messages.success(request, "Payment successfully completed!")  
-    return redirect('https://flower-sell.netlify.app/order_history')
+    return redirect('https://flower-sell.vercel.app/order_history')
 
 
 @csrf_exempt
@@ -70,6 +70,6 @@ def payment_fail(request, *args, **kwargs):
     flower_id = request.GET.get('id', None)  
     if flower_id:
         messages.error(request, "Payment failed! Please try again.")
-        return redirect(f'https://flower-sell.netlify.app/flower_details/?flower_id={flower_id}')
+        return redirect(f'https://flower-sell.vercel.app/flower_details/?flower_id={flower_id}')
     else:
-        return redirect('https://flower-sell.netlify.app/auth_home')
+        return redirect('https://flower-sell.vercel.app/auth_home')

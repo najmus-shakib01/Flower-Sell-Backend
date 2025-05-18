@@ -52,7 +52,7 @@ class OrderView(APIView):
                     flower=flower,
                     quantity=quantity,
                     status='Pending',  
-                    transaction_id=str(uuid.uuid4())
+                    transaction_id=None
                 )
                 flower.stock -= quantity
                 flower.save()

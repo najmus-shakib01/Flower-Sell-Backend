@@ -15,24 +15,6 @@ class UserSerializer(serializers.ModelSerializer):
             'email': {'required': False}
         }
 
-    def update(self, instance, validated_data):
-        profile_data = validated_data.pop('profile', {})
-        
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-
-        if profile_data:
-            profile = instance.profile
-            if not hasattr(instance, 'profile'):
-                Profile.objects.create(user=instance, **profile_data)
-            else:
-                for attr, value in profile_data.items():
-                    setattr(profile, attr, value)
-                profile.save()
-
-        return instance
-
 class RegistrationSerializer(serializers.ModelSerializer):
     confirm_password = serializers.CharField(write_only=True)
     profile_img = serializers.URLField()

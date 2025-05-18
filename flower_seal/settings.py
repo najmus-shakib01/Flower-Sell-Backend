@@ -43,8 +43,8 @@ INSTALLED_APPS = [
     'pass_change',
     'orders',
     'admins',
-    'payments',
     'rest_framework.authtoken',
+    'payment',
     'corsheaders',
     'django_filters'
 ]
