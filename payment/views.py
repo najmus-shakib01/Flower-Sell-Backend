@@ -9,22 +9,44 @@ from flowers.models import Flower
 from orders.models import Order
 from django.views.decorators.csrf import csrf_exempt
 import requests
+from .models import Payment
 
 class SSLCommerzFlowerPaymentView(APIView):
     def get(self, request, flower_id, *args, **kwargs):
         flower = get_object_or_404(Flower, id=flower_id)
-        transaction_id = str(uuid.uuid4())
-
+        user = request.user
+        
+        existing_order = Order.objects.filter(
+            user=user,
+            flower=flower,
+            status='Pending',
+            transaction_id__isnull=True
+        ).first()
+        
+        if existing_order:
+            transaction_id = existing_order.transaction_id or str(uuid.uuid4())
+            existing_order.transaction_id = transaction_id
+            existing_order.save()
+        else:
+            transaction_id = str(uuid.uuid4())
+            existing_order = Order.objects.create(
+                user=user,
+                flower=flower,
+                quantity=1,
+                status='Pending',
+                transaction_id=transaction_id
+            )
+        
         sslcommerz_data = {
             'store_id': settings.SSL_COMMERZ['store_id'],
             'store_passwd': settings.SSL_COMMERZ['store_pass'],
             'total_amount': float(flower.price),
             'currency': 'BDT',
             'tran_id': transaction_id,
-            'success_url': f"https://flower-sell-backend.vercel.app/api/v1/payment/payment_success/",
-            'fail_url': f"https://flower-sell-backend.vercel.app/api/v1/payment/payment_fail/?id={flower.id}",
-            'cus_name': 'Test User',
-            'cus_email': 'test@example.com',
+            'success_url': f"https://flower-sell-backend.vercel.app/api/v1/payment/payment_success/?order_id={existing_order.id}",
+            'fail_url': f"https://flower-sell-backend.vercel.app/api/v1/payment/payment_fail/?order_id={existing_order.id}",
+            'cus_name': user.username,
+            'cus_email': user.email,
             'cus_phone': '01700000000',
             'cus_add1': 'Dhaka',
             'cus_city': 'Dhaka',
@@ -34,7 +56,7 @@ class SSLCommerzFlowerPaymentView(APIView):
             'product_category': flower.category,
             'product_profile': 'general',
         }
-
+        
         url = 'https://sandbox.sslcommerz.com/gwprocess/v4/api.php' if settings.SSL_COMMERZ['issandbox'] \
             else 'https://securepay.sslcommerz.com/gwprocess/v4/api.php'
 
@@ -44,23 +66,36 @@ class SSLCommerzFlowerPaymentView(APIView):
             res_data = response.json()
             if res_data.get('status') == 'SUCCESS':
                 return Response({'redirect_url': res_data['GatewayPageURL']}, status=status.HTTP_200_OK)
-            else:
-                return Response({'error': 'SSLCommerz payment failed'}, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response({'error': 'Something went wrong'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        return Response({'error': 'Payment initiation failed'}, status=status.HTTP_400_BAD_REQUEST)
 
 @csrf_exempt
 def payment_success(request, *args, **kwargs):
-    print("Payment Success POST Data:", request.POST)  
     tran_id = request.POST.get('tran_id') or request.GET.get('tran_id')
-    if tran_id:
-        order = Order.objects.filter(status='Pending', transaction_id=None).first()
-        if order:
+    order_id = request.GET.get('order_id')
+    
+    if tran_id and order_id:
+        try:
+            order = Order.objects.get(id=order_id, transaction_id=tran_id)
             order.status = 'Completed'
             print(order.status)
-            order.transaction_id = tran_id  
             order.save()
-            messages.success(request, "Payment successfully completed!")  
+            
+            Payment.objects.create(
+                user=order.user,
+                transaction_id=tran_id,
+                amount=order.flower.price * order.quantity,
+                status='Completed'
+            )
+            
+            flower = order.flower
+            flower.stock -= order.quantity
+            flower.save()
+            
+            messages.success(request, "Payment successfully completed!")
+        except Order.DoesNotExist:
+            messages.error(request, "Order not found!")
+    
     return redirect('https://flower-sell.vercel.app/order_history')
 
 

@@ -20,8 +20,8 @@ ALLOWED_HOSTS = ["127.0.0.1", ".vercel.app"]
 
 CORS_ALLOW_ALL_ORIGINS = True 
 
-CSRF_TRUSTED_ORIGINS = [
-    'https://flower-sell.vercel.app/'
+CORS_ALLOWED_ORIGINS = [
+    "https://flower-sell.vercel.app",
 ]
 
 # Application definition
