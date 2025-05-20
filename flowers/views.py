@@ -11,6 +11,8 @@ from .serializers import (
 )
 import logging
 logger = logging.getLogger(__name__)
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
+
 
 # Flower API
 class FlowerListAPIView(APIView):
@@ -143,27 +145,65 @@ class FlowerCareTipAPIView(APIView):
 
 # Cart API
 class CartApiView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
     def get(self, request):
+        if not request.user.is_authenticated:
+            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
+        
         cart_items = CartItem.objects.filter(user=request.user)
         serializer = CartItemSerializer(cart_items, many=True)
         return Response(serializer.data)
 
     def post(self, request):
+        if not request.user.is_authenticated:
+            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
+
         flower_id = request.data.get("flower")
-        quantity = request.data.get("quantity")
+        quantity = request.data.get("quantity", 1)  
 
-        if not flower_id or not quantity:
-            return Response({"error": "Missing flower or quantity data"}, status=status.HTTP_400_BAD_REQUEST)
+        if not flower_id:
+            return Response({"error": "Flower ID is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        flower = get_object_or_404(Flower, id=flower_id)
-        existing_item = CartItem.objects.filter(flower=flower, user=request.user).first()
-        if existing_item:
-            return Response({"error": "This Product Is Already In Your Cart!"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            flower = Flower.objects.get(id=flower_id)
+        except Flower.DoesNotExist:
+            return Response({"error": "Flower not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        cart_item = CartItem.objects.create(user=request.user, flower=flower, quantity=quantity)
-        return Response({"message": "Product Added Successfully!", "cart_item": cart_item.id}, status=status.HTTP_201_CREATED)
+        if CartItem.objects.filter(flower=flower, user=request.user).exists():
+            return Response(
+                {"error": "This product is already in your cart!"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        cart_item = CartItem.objects.create(
+            user=request.user,
+            flower=flower,
+            quantity=quantity
+        )
+        
+        serializer = CartItemSerializer(cart_item)
+        return Response(
+            {
+                "message": "Product added to cart successfully!",
+                "cart_item": serializer.data
+            },
+            status=status.HTTP_201_CREATED
+        )
 
     def delete(self, request, cart_id):
-        cart_item = get_object_or_404(CartItem, id=cart_id, user=request.user)
+        if not request.user.is_authenticated:
+            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            cart_item = CartItem.objects.get(id=cart_id, user=request.user)
+        except CartItem.DoesNotExist:
+            return Response(
+                {"error": "Cart item not found or doesn't belong to you"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
         cart_item.delete()
-        return Response({"message": "Item Removed From Cart Successfully"}, status=status.HTTP_200_OK)
+        return Response(
+            {"message": "Item removed from cart successfully"},
+            status=status.HTTP_200_OK
+        )
