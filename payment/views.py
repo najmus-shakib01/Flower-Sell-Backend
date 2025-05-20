@@ -107,4 +107,4 @@ def payment_fail(request, *args, **kwargs):
         messages.error(request, "Payment failed! Please try again.")
         return redirect(f'https://flower-sell.vercel.app/flower_details/?flower_id={flower_id}')
     else:
-        return redirect('https://flower-sell.vercel.app/auth_home')
+        return redirect(f'https://flower-sell.vercel.app/flower_details/?flower_id={flower_id}')
