@@ -101,10 +101,9 @@ def payment_success(request, *args, **kwargs):
 
 @csrf_exempt
 def payment_fail(request, *args, **kwargs):
-    print("Payment Fail GET Data:", request.GET)  
-    flower_id = request.GET.get('id', None)  
-    if flower_id:
+    flower = request.GET.get('id', None)  
+    if flower:
         messages.error(request, "Payment failed! Please try again.")
-        return redirect(f'https://flower-sell.vercel.app/flower_details/?flower_id={flower_id}')
+        return redirect(f'https://flower-sell.vercel.app/flower_details/?flower_id={flower.id}')
     else:
-        return redirect(f'https://flower-sell.vercel.app/flower_details/?flower_id={flower_id}')
+        return redirect(f'https://flower-sell.vercel.app/auth_home')
