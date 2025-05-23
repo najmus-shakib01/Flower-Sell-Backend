@@ -71,8 +71,9 @@ class CartItemSerializer(serializers.ModelSerializer):
     flower_description = serializers.CharField(source="flower.description", read_only=True)
     flower_stock = serializers.IntegerField(source="flower.stock", read_only=True)
     flower_category = serializers.CharField(source="flower.category", read_only=True)
-    flower = serializers.StringRelatedField()
+    flower_id = serializers.PrimaryKeyRelatedField(read_only=True) 
+    flower_name = serializers.CharField(source="flower.title", read_only=True)  
     
     class Meta:
         model = CartItem
-        fields = ['id', 'flower', 'flower_price', 'flower_image', 'flower_description', 'flower_stock', 'flower_category', 'quantity', 'added_at']
+        fields = ['id', 'flower_id', 'flower_name', 'flower_price', 'flower_image', 'flower_description', 'flower_stock', 'flower_category', 'quantity', 'added_at']

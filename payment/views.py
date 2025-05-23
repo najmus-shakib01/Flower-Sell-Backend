@@ -23,19 +23,18 @@ class SSLCommerzFlowerPaymentView(APIView):
             transaction_id__isnull=True
         ).first()
         
-        if existing_order:
-            transaction_id = existing_order.transaction_id or str(uuid.uuid4())
-            existing_order.transaction_id = transaction_id
-            existing_order.save()
-        else:
-            transaction_id = str(uuid.uuid4())
+        if not existing_order:
             existing_order = Order.objects.create(
                 user=user,
                 flower=flower,
                 quantity=1,
                 status='Pending',
-                transaction_id=transaction_id
+                transaction_id=None  
             )
+        
+        transaction_id = str(uuid.uuid4())
+        existing_order.transaction_id = transaction_id
+        existing_order.save()
         
         sslcommerz_data = {
             'store_id': settings.SSL_COMMERZ['store_id'],
@@ -77,16 +76,21 @@ def payment_success(request, *args, **kwargs):
     if tran_id and order_id:
         try:
             order = Order.objects.get(id=order_id, transaction_id=tran_id)
+            
+            if order.status == 'Completed':
+                messages.warning(request, "This order was already paid!")
+                return redirect('https://flower-sell.vercel.app/order_history')
+            
             order.status = 'Completed'
-            print(order.status)
             order.save()
             
-            Payment.objects.create(
-                user=order.user,
-                transaction_id=tran_id,
-                amount=order.flower.price * order.quantity,
-                status='Completed'
-            )
+            if not Payment.objects.filter(transaction_id=tran_id).exists():
+                Payment.objects.create(
+                    user=order.user,
+                    transaction_id=tran_id,
+                    amount=order.flower.price * order.quantity,
+                    status='Completed'
+                )
             
             flower = order.flower
             flower.stock -= order.quantity
@@ -101,9 +105,20 @@ def payment_success(request, *args, **kwargs):
 
 @csrf_exempt
 def payment_fail(request, *args, **kwargs):
-    flower = request.GET.get('id', None)  
-    if flower:
-        messages.error(request, "Payment failed! Please try again.")
-        return redirect(f'https://flower-sell.vercel.app/flower_details/?flower_id={flower.id}')
-    else:
-        return redirect(f'https://flower-sell.vercel.app/auth_home')
+    order_id = request.GET.get('order_id')
+    
+    if order_id:
+        try:
+            order = Order.objects.get(id=order_id)
+            order.status = 'Pending'
+            order.transaction_id = None
+            order.save()
+
+            messages.error(request, "Payment failed! Please try again.")
+            return redirect(f'https://flower-sell.vercel.app/flower_details/?flower_id={order.flower.id}')
+        
+        except Order.DoesNotExist:
+            messages.error(request, "Invalid order ID")
+            return redirect('https://flower-sell.vercel.app')
+    
+    return redirect('https://flower-sell.vercel.app/auth_home')
