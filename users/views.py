@@ -50,13 +50,7 @@ class RegisterAPIView(APIView):
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
-            user = serializer.save()
-            user.is_active = False 
-            user.save()
-
-            profile, created = Profile.objects.get_or_create(user=user)
-            profile.otp = generate_otp()  
-            profile.save()
+            user = serializer.save() 
 
             email_subject = 'Welcome To Our Platform!'
             email_body = render_to_string('welcome_email.html', {'username': user.username})
@@ -69,25 +63,30 @@ class RegisterAPIView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
 #send opt
 class ResendOTPApiView(APIView):
     def post(self, request, *args, **kwargs):
         email = request.data.get('email')
+        if not email:
+            return Response({'Error': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
+
         user = get_object_or_404(User, email=email)
 
         otp_code = generate_otp()
+
+        print(f"[{email}] Saving OTP to DB: {otp_code}")
         user.profile.otp = otp_code
-        user.profile.save()
+        user.profile.save(update_fields=['otp'])
 
         send_mail(
-            'Your OTP Code : ',
-            f'Your New OTP Code Is : {otp_code}',
-            'syednazmusshakib94@gmail.com',
-            [email]
+            subject='Your OTP Code',
+            message=f'Your OTP Code is: {otp_code}',
+            from_email='syednazmusshakib94@gmail.com',
+            recipient_list=[email],
+            fail_silently=False,
         )
 
-        return Response({'Message' : 'OTP Has Been Resent To Your Email'}, status=status.HTTP_200_OK)
+        return Response({'Message': 'OTP has been sent to your email'}, status=status.HTTP_200_OK)
     
 
 #verify otp
@@ -96,17 +95,26 @@ class VerifyOTPApiView(APIView):
         email = request.data.get('email')
         otp = request.data.get('otp')
 
+        if not email or not otp:
+            return Response({'Error': 'Email and OTP are required'}, status=status.HTTP_400_BAD_REQUEST)
+
         user = get_object_or_404(User, email=email)
         profile = user.profile
 
-        if profile.otp == otp:
-            user.is_active = True
-            user.save(update_fields=['is_active']) 
-            profile.otp = None
-            profile.save(update_fields=['otp']) 
-            return Response({'Message' : 'Account Activate Successfully'}, status=status.HTTP_200_OK)
-        return Response({'Error' : 'Invalid OTP'}, status=status.HTTP_400_BAD_REQUEST)
+        print(f"[{email}] Received OTP: {otp}")
+        print(f"[{email}] Actual OTP in DB: {profile.otp}")
 
+        if str(profile.otp) == str(otp):
+            user.is_active = True
+            user.save(update_fields=['is_active'])
+
+            profile.otp = None
+            profile.save(update_fields=['otp'])
+
+            return Response({'Message': 'Account activated successfully'}, status=status.HTTP_200_OK)
+
+        return Response({'Error': 'Invalid OTP'}, status=status.HTTP_400_BAD_REQUEST)
+    
 
 #user login korar jonno
 class LoginAPIView(APIView):

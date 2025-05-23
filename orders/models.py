@@ -2,7 +2,6 @@ from django.db import models
 from django.contrib.auth.models import User
 from flowers.models import Flower
 from .constants import ORDER_STATUS
-import uuid
 
 class Order(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
