@@ -140,7 +140,7 @@ class ContactFormView(APIView):
                 admin_email_obj.send(fail_silently=False)
 
                 user_email_obj = EmailMessage(
-                    subject="Flower Seal প্লাটফর্মের সাথে যোগাযোগের জন্য ধন্যবাদ!",
+                    subject="যোগাযোগের জন্য ধন্যবাদ!",
                     body=f"""হাই {name},\n\n
                     আমরা আপনার বার্তা পেয়েছি।\n\n
                     আপনার দেওয়া তথ্য :
