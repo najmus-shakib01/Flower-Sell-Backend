@@ -2,7 +2,6 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
-from django.core.mail import send_mail
 from .models import Flower, Comment, CartItem, PlantRevivalTip
 from orders.models import Order
 from .serializers import (
@@ -12,7 +11,8 @@ from .serializers import (
 import logging
 logger = logging.getLogger(__name__)
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
-
+from django.core.mail import EmailMessage
+import os
 
 # Flower API
 class FlowerListAPIView(APIView):
@@ -117,20 +117,46 @@ class ContactFormView(APIView):
             email = serializer.validated_data['email']
             message = serializer.validated_data['message']
 
-            subject = f"Contact Form Submission from {name}"
-            email_message = f"Name: {name}\nEmail: {email}\nMessage:\n{message}"
+            subject = f"New message from {name} ({email})"
+            email_message = f"""
+            You have received a new message from your website:
 
+            Name: {name}
+            Email: {email}
+            
+            Message:
+            {message}
+            """
+            from_email = os.environ.get("EMAIL")
+           
             try:
-                send_mail(
-                    subject,
-                    email_message,
-                    'noreply@yourdomain.com',
-                    ['syednazmusshakib94@gmail.com'],
-                    fail_silently=False,
+                admin_email_obj = EmailMessage(
+                    subject=subject,
+                    body=email_message,
+                    from_email=from_email,
+                    to=[from_email],
+                    reply_to=[email]
                 )
-                return Response({"message": "Email sent successfully"}, status=status.HTTP_200_OK)
+                admin_email_obj.send(fail_silently=False)
+
+                user_email_obj = EmailMessage(
+                    subject="Flower Seal প্লাটফর্মের সাথে যোগাযোগের জন্য ধন্যবাদ!",
+                    body=f"""হাই {name},\n\n
+                    আমরা আপনার বার্তা পেয়েছি।\n\n
+                    আপনার দেওয়া তথ্য :
+                    নাম : {name}
+                    ইমেইল : {email}
+                    আপনার মেসেজটি ছিল : \n{message}""",
+                    from_email=from_email,
+                    to=[email]
+                )
+                user_email_obj.send(fail_silently=False)
+
+                return Response({"message": "Email sent successfully! Please Check Your Email"}, status=status.HTTP_200_OK)
+
             except Exception as e:
-                return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                logger.error(f"Email sending failed: {str(e)}")
+                return Response({"error": "Failed to send email."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
