@@ -43,6 +43,14 @@ class OrderView(APIView):
             quantity = serializer.validated_data['quantity']
             flower = get_object_or_404(Flower, id=flower_id)  
 
+            # Check kora hoyeche user already order koreche kina
+            existing_order = Order.objects.filter(user=user, flower=flower).exists()
+            if existing_order:
+                return Response(
+                    {'error': 'You have already ordered this flower. You cannot order it again.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             if flower.stock < quantity:
                 return Response({'error': 'Insufficient stock available'}, status=status.HTTP_400_BAD_REQUEST)
 
