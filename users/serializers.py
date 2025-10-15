@@ -3,6 +3,7 @@ from django.contrib.auth.models import User
 from .utils import generate_otp
 from .models import Profile
 from django.core.mail import send_mail
+from django.utils import timezone
 
 class UserSerializer(serializers.ModelSerializer):
     profile_img = serializers.CharField(source='profile.profile_img', required=False, allow_blank=True)
@@ -58,10 +59,15 @@ class RegistrationSerializer(serializers.ModelSerializer):
         user.save()
 
         otp_code = generate_otp()
-        Profile.objects.create(user=user, profile_img=profile_img, otp=otp_code)
+        Profile.objects.create(
+            user=user, 
+            profile_img=profile_img, 
+            otp=otp_code,
+            otp_created_at=timezone.now()  
+        )
 
         email_subject = 'Your OTP Code : '
-        email_body = f'Your OTP Code Is : {otp_code}'
+        email_body = f'Your OTP Code Is : {otp_code} (Valid for 1 minutes)'
         send_mail(
             email_subject,
             email_body,

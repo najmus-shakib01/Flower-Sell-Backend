@@ -14,6 +14,7 @@ from .serializers import  UserSerializer, RegistrationSerializer, LoginSerialize
 from django.shortcuts import get_object_or_404
 from .utils import generate_otp
 from django.core.mail import send_mail
+from django.utils import timezone
 
 #user dekar jonno
 class UserAPIView(APIView):
@@ -76,17 +77,18 @@ class ResendOTPApiView(APIView):
 
         print(f"[{email}] Saving OTP to DB: {otp_code}")
         user.profile.otp = otp_code
-        user.profile.save(update_fields=['otp'])
+        user.profile.otp_created_at = timezone.now()  
+        user.profile.save(update_fields=['otp', 'otp_created_at'])
 
         send_mail(
             subject='Your OTP Code',
-            message=f'Your OTP Code is: {otp_code}',
+            message=f'Your OTP Code is: {otp_code} (Valid for 1 minutes)',
             from_email='syednazmusshakib94@gmail.com',
             recipient_list=[email],
             fail_silently=False,
         )
 
-        return Response({'Message': 'OTP has been sent to your email'}, status=status.HTTP_200_OK)
+        return Response({'Message': 'New OTP has been sent to your email'}, status=status.HTTP_200_OK)
     
 
 #verify otp
@@ -104,12 +106,16 @@ class VerifyOTPApiView(APIView):
         print(f"[{email}] Received OTP: {otp}")
         print(f"[{email}] Actual OTP in DB: {profile.otp}")
 
+        if profile.is_otp_expired():
+            return Response({'Error': 'OTP has expired. Please request a new one.'}, status=status.HTTP_400_BAD_REQUEST)
+
         if str(profile.otp) == str(otp):
             user.is_active = True
             user.save(update_fields=['is_active'])
 
             profile.otp = None
-            profile.save(update_fields=['otp'])
+            profile.otp_created_at = None
+            profile.save(update_fields=['otp', 'otp_created_at'])
 
             return Response({'Message': 'Account activated successfully'}, status=status.HTTP_200_OK)
 
