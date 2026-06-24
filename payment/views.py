@@ -24,6 +24,8 @@ class SSLCommerzFlowerPaymentView(APIView):
         ).first()
         
         if not existing_order:
+            if flower.stock < 1:
+                return Response({'error': 'Insufficient stock available'}, status=status.HTTP_400_BAD_REQUEST)
             existing_order = Order.objects.create(
                 user=user,
                 flower=flower,
@@ -31,10 +33,14 @@ class SSLCommerzFlowerPaymentView(APIView):
                 status='Pending',
                 transaction_id=None  
             )
+            flower.stock -= 1
+            flower.save()
         
         transaction_id = str(uuid.uuid4())
         existing_order.transaction_id = transaction_id
         existing_order.save()
+        
+        base_url = request.build_absolute_uri('/').rstrip('/')
         
         sslcommerz_data = {
             'store_id': settings.SSL_COMMERZ['store_id'],
@@ -42,8 +48,8 @@ class SSLCommerzFlowerPaymentView(APIView):
             'total_amount': float(flower.price),
             'currency': 'BDT',
             'tran_id': transaction_id,
-            'success_url': f"https://flower-sell-backend.vercel.app/api/v1/payment/payment_success/?order_id={existing_order.id}",
-            'fail_url': f"https://flower-sell-backend.vercel.app/api/v1/payment/payment_fail/?order_id={existing_order.id}",
+            'success_url': f"{base_url}/api/v1/payment/payment_success/?order_id={existing_order.id}",
+            'fail_url': f"{base_url}/api/v1/payment/payment_fail/?order_id={existing_order.id}",
             'cus_name': user.username,
             'cus_email': user.email,
             'cus_phone': '01700000000',
@@ -73,13 +79,19 @@ def payment_success(request, *args, **kwargs):
     tran_id = request.POST.get('tran_id') or request.GET.get('tran_id')
     order_id = request.GET.get('order_id')
     
+    host = request.get_host()
+    if '127.0.0.1' in host or 'localhost' in host:
+        frontend_url = 'http://localhost:5173'
+    else:
+        frontend_url = 'https://flower-sell.vercel.app'
+        
     if tran_id and order_id:
         try:
             order = Order.objects.get(id=order_id, transaction_id=tran_id)
             
             if order.status == 'Completed':
                 messages.warning(request, "This order was already paid!")
-                return redirect('https://flower-sell.vercel.app/order_history')
+                return redirect(f'{frontend_url}/order_history')
             
             order.status = 'Completed'
             order.save()
@@ -92,21 +104,23 @@ def payment_success(request, *args, **kwargs):
                     status='Completed'
                 )
             
-            flower = order.flower
-            flower.stock -= order.quantity
-            flower.save()
-            
             messages.success(request, "Payment successfully completed!")
         except Order.DoesNotExist:
             messages.error(request, "Order not found!")
     
-    return redirect('https://flower-sell.vercel.app/order_history')
+    return redirect(f'{frontend_url}/order_history')
 
 
 @csrf_exempt
 def payment_fail(request, *args, **kwargs):
     order_id = request.GET.get('order_id')
     
+    host = request.get_host()
+    if '127.0.0.1' in host or 'localhost' in host:
+        frontend_url = 'http://localhost:5173'
+    else:
+        frontend_url = 'https://flower-sell.vercel.app'
+        
     if order_id:
         try:
             order = Order.objects.get(id=order_id)
@@ -115,10 +129,10 @@ def payment_fail(request, *args, **kwargs):
             order.save()
 
             messages.error(request, "Payment failed! Please try again.")
-            return redirect(f'https://flower-sell.vercel.app/flower_details/?flower_id={order.flower.id}')
+            return redirect(f'{frontend_url}/flower_details/?flower_id={order.flower.id}')
         
         except Order.DoesNotExist:
             messages.error(request, "Invalid order ID")
-            return redirect('https://flower-sell.vercel.app')
+            return redirect(frontend_url)
     
-    return redirect('https://flower-sell.vercel.app/auth_home')
+    return redirect(f'{frontend_url}/auth_home')

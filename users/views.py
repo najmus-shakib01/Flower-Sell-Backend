@@ -15,19 +15,37 @@ from django.shortcuts import get_object_or_404
 from .utils import generate_otp
 from django.core.mail import send_mail
 from django.utils import timezone
+from django.conf import settings
+from rest_framework.permissions import IsAuthenticated
+from flower_seal.pagination import StandardResultsSetPagination
 
 #user dekar jonno
 class UserAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request, pk=None):
         if pk:
+            if request.user.id != pk and not request.user.is_staff:
+                return Response({"detail": "You do not have permission to view this profile."}, status=status.HTTP_403_FORBIDDEN)
             user = get_object_or_404(User, pk=pk)
             serializer = UserSerializer(user)
+            return Response(serializer.data)
         else:
-            users = User.objects.all()
+            if not request.user.is_staff:
+                return Response({"detail": "You do not have permission to view all users."}, status=status.HTTP_403_FORBIDDEN)
+            users = User.objects.all().order_by('id')
+            paginator = StandardResultsSetPagination()
+            paginator.page_size = 10
+            page = paginator.paginate_queryset(users, request)
+            if page is not None:
+                serializer = UserSerializer(page, many=True)
+                return paginator.get_paginated_response(serializer.data)
             serializer = UserSerializer(users, many=True)
-        return Response(serializer.data)
+            return Response(serializer.data)
 
     def put(self, request, pk):
+        if request.user.id != pk and not request.user.is_staff:
+            return Response({"detail": "You do not have permission to edit this profile."}, status=status.HTTP_403_FORBIDDEN)
         user = get_object_or_404(User, pk=pk)
         serializer = UserSerializer(user, data=request.data, partial=True)
 
@@ -38,6 +56,8 @@ class UserAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def post(self, request):
+        if not request.user.is_staff:
+            return Response({"detail": "You do not have permission to create users directly."}, status=status.HTTP_403_FORBIDDEN)
         serializer = UserSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -56,7 +76,7 @@ class RegisterAPIView(APIView):
             email_subject = 'Welcome To Our Platform!'
             email_body = render_to_string('welcome_email.html', {'username': user.username})
 
-            email = EmailMultiAlternatives(email_subject, '', 'syednazmusshakib94@gmail.com', [user.email])
+            email = EmailMultiAlternatives(email_subject, '', settings.EMAIL_HOST_USER, [user.email])
             email.attach_alternative(email_body, 'text/html')
             email.send()
 
@@ -83,7 +103,7 @@ class ResendOTPApiView(APIView):
         send_mail(
             subject='Your OTP Code',
             message=f'Your OTP Code is: {otp_code} (Valid for 1 minutes)',
-            from_email='syednazmusshakib94@gmail.com',
+            from_email=settings.EMAIL_HOST_USER,
             recipient_list=[email],
             fail_silently=False,
         )

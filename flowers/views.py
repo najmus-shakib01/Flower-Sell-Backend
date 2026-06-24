@@ -10,18 +10,35 @@ from .serializers import (
 )
 import logging
 logger = logging.getLogger(__name__)
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
+from flower_seal.pagination import StandardResultsSetPagination
 from django.core.mail import EmailMessage
 import os
 
 # Flower API
 class FlowerListAPIView(APIView):
     def get(self, request):
-        flowers = Flower.objects.all()
+        category = request.query_params.get('category')
+        search = request.query_params.get('search')
+        
+        flowers = Flower.objects.all().order_by('id')
+        if category and category.lower() != 'all':
+            flowers = flowers.filter(category__iexact=category)
+        if search:
+            flowers = flowers.filter(title__icontains=search)
+            
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(flowers, request)
+        if page is not None:
+            serializer = FlowerSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
         serializer = FlowerSerializer(flowers, many=True)
         return Response(serializer.data)
 
     def post(self, request):
+        if not (request.user and request.user.is_authenticated and request.user.is_staff):
+            return Response({"detail": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN)
         serializer = FlowerSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -39,6 +56,8 @@ class FlowerDetailAPIView(APIView):
         return Response(serializer.data)
 
     def put(self, request, pk):
+        if not (request.user and request.user.is_authenticated and request.user.is_staff):
+            return Response({"detail": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN)
         flower = self.get_object(pk)
         serializer = FlowerSerializer(flower, data=request.data)
         if serializer.is_valid():
@@ -47,6 +66,8 @@ class FlowerDetailAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
+        if not (request.user and request.user.is_authenticated and request.user.is_staff):
+            return Response({"detail": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN)
         flower = self.get_object(pk)
         flower.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -80,6 +101,8 @@ class CommentShowAPIView(APIView):
         return Response(serializer.data)
     
 class CommentEditAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    
     def get(self, request, postId):
         flower = get_object_or_404(Flower, id=postId)
         comments = Comment.objects.filter(flower=flower)
@@ -88,6 +111,8 @@ class CommentEditAPIView(APIView):
     
     def put(self, request, commentId, *args, **kwargs):
         comment = get_object_or_404(Comment, id=commentId)
+        if comment.user != request.user:
+            return Response({"message": "You do not have permission to edit this comment."}, status=status.HTTP_403_FORBIDDEN)
         serializer = CommentEditSerializer(comment, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()

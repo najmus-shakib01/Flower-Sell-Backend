@@ -4,6 +4,7 @@ from .utils import generate_otp
 from .models import Profile
 from django.core.mail import send_mail
 from django.utils import timezone
+from django.conf import settings
 
 class UserSerializer(serializers.ModelSerializer):
     profile_img = serializers.CharField(source='profile.profile_img', required=False, allow_blank=True)
@@ -45,6 +46,13 @@ class RegistrationSerializer(serializers.ModelSerializer):
             'password': {'write_only': True},
         }
 
+    def validate_email(self, value):
+        if not value:
+            raise serializers.ValidationError("Email is required.")
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value
+
     def validate(self, data):
         if data['password'] != data['confirm_password']:
             raise serializers.ValidationError("Passwords do not match")
@@ -71,7 +79,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
         send_mail(
             email_subject,
             email_body,
-            'syednazmusshakib94@gmail.com', 
+            settings.EMAIL_HOST_USER, 
             [user.email]
         )
         

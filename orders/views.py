@@ -17,11 +17,18 @@ from django.conf import settings
 from django.db.models import Sum, F
 from decimal import Decimal
 from rest_framework.permissions import IsAuthenticated
+from flower_seal.pagination import StandardResultsSetPagination
 
 #eta hocce flower order korar jonno post and get
 class OrderAPIView(APIView): 
     def get(self, request, *args, **kwargs):
-        orders = Order.objects.filter(user=request.user)
+        orders = Order.objects.filter(user=request.user).order_by('-order_date')
+        paginator = StandardResultsSetPagination()
+        paginator.page_size = 10
+        page = paginator.paginate_queryset(orders, request)
+        if page is not None:
+            serializer = OrderSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
         serializer = OrderSerializer(orders, many=True)
         return Response(serializer.data)
 
@@ -90,7 +97,18 @@ class OrderView(APIView):
 
 
 class AllUsersOrderHistoryAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request, *args, **kwargs):
+        if not request.user.is_staff:
+            return Response({"detail": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN)
+        orders = Order.objects.all().order_by('-order_date')
+        paginator = StandardResultsSetPagination()
+        paginator.page_size = 10
+        page = paginator.paginate_queryset(orders, request)
+        if page is not None:
+            serializer = OrderSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
         orders = Order.objects.all()
         serializer = OrderSerializer(orders, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -128,8 +146,11 @@ class OneUserOrderStatsAPIView(APIView):
 
 #all user order data
 class UserOrderStatusAPIView(APIView):
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
+        if not request.user.is_staff:
+            return Response({"detail": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN)
 
         total_orders = Order.objects.count()
 
