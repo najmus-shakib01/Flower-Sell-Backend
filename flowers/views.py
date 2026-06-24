@@ -128,8 +128,11 @@ class CommentCheckOrderAPIView(APIView):
             print("Validated Flower ID:", flower_id)
             user = request.user
             flower = get_object_or_404(Flower, id=flower_id)
-            order_exists = Order.objects.filter(user=user, flower=flower).exists()
-            return Response({"can_comment": order_exists}, status=status.HTTP_200_OK)
+            order = Order.objects.filter(user=user, flower=flower).first()
+            return Response({
+                "can_comment": order is not None,
+                "order_status": order.status if order else None
+            }, status=status.HTTP_200_OK)
         print("Serializer Errors:", serializer.errors)  
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
